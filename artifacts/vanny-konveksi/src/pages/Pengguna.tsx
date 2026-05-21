@@ -86,34 +86,38 @@ export default function Pengguna() {
   const handleChangeRole = async (target: ProfileRow, newRole: UserRole) => {
     if (target.role === newRole) return;
     setSavingId(target.id);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole } as never)
-      .eq("id", target.id);
-    setSavingId(null);
-    if (error) {
-      toast({ title: "Gagal mengubah peran", description: error.message, variant: "destructive" });
-      return;
+    try {
+      const res = await fetch(`/api/users/${target.id}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Gagal mengubah peran");
+      toast({ title: "Peran diperbarui", description: `${target.full_name} sekarang ${roleStyles[newRole].label}` });
+      setProfiles((prev) => prev.map((p) => (p.id === target.id ? { ...p, role: newRole } : p)));
+    } catch (err: any) {
+      toast({ title: "Gagal mengubah peran", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingId(null);
     }
-    toast({ title: "Peran diperbarui", description: `${target.full_name} sekarang ${roleStyles[newRole].label}` });
-    setProfiles((prev) => prev.map((p) => (p.id === target.id ? { ...p, role: newRole } : p)));
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    const { error } = await supabase
-      .from("profiles")
-      .delete()
-      .eq("id", deleteTarget.id);
-    setDeleting(false);
-    if (error) {
-      toast({ title: "Gagal menghapus", description: error.message, variant: "destructive" });
-      return;
+    try {
+      const res = await fetch(`/api/users/${deleteTarget.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Gagal menghapus pengguna");
+      toast({ title: "Pengguna dihapus", description: `${deleteTarget.full_name} sudah dihapus dari sistem.` });
+      setProfiles((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      toast({ title: "Gagal menghapus", description: err.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
     }
-    toast({ title: "Profil dihapus", description: `${deleteTarget.full_name} sudah tidak punya akses ke sistem.` });
-    setProfiles((prev) => prev.filter((p) => p.id !== deleteTarget.id));
-    setDeleteTarget(null);
   };
 
   const stats = {
