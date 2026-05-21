@@ -1,12 +1,9 @@
 import { Router } from "express";
-import OpenAI from "openai";
 
 const router = Router();
 
-const openai = new OpenAI({
-  apiKey: process.env.PIO_API_KEY,
-  baseURL: "https://pio.codes/v1",
-});
+const PIO_API_KEY = process.env.PIO_API_KEY;
+const PIO_BASE_URL = "https://pio.codes/v1/chat/completions";
 
 const SYSTEM_PROMPT = `Kamu adalah asisten virtual Vanny Konveksi, bisnis konveksi yang memproduksi seragam sekolah, pemerintah, dan perusahaan berkualitas tinggi.
 
@@ -36,25 +33,61 @@ router.post("/chatbot", async (req, res) => {
     return res.status(400).json({ error: "messages diperlukan" });
   }
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-
   try {
-    const stream = await openai.chat.completions.create({
-      model: "qwen-plus",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      stream: true,
+    const response = await fetch(PIO_BASE_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${PIO_API_KEY}`,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; VannyKonveksi/1.0)",
+      },
+      body: JSON.stringify({
+        model: "qwen-plus",
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        stream: true,
+        stream_options: { include_usage: false },
+      }),
     });
 
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content ?? "";
-      if (content) {
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("pio.codes error:", response.status, text);
+      return res.status(500).json({ error: "Gagal memproses pesan" });
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") {
+          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content ?? "";
+          if (content) {
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        } catch {}
       }
     }
 
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
     console.error("Chatbot error:", err);
