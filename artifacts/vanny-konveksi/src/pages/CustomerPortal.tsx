@@ -17,6 +17,7 @@ import PortalCart from "./portal/PortalCart";
 import PortalCheckout from "./portal/PortalCheckout";
 import PortalCustomBuilder from "./portal/PortalCustomBuilder";
 import ProductDetailDialog from "./portal/ProductDetailDialog";
+import PortalChatbot from "./portal/PortalChatbot";
 
 export default function CustomerPortal() {
   const { user, profile, logout } = useAuth();
@@ -283,6 +284,8 @@ export default function CustomerPortal() {
         onClose={() => setActiveProduct(null)}
         onAddToCart={handleAddToCart}
       />
+
+      <PortalChatbot />
     </div>
   );
 }
