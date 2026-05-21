@@ -83,6 +83,11 @@ export default function Pengguna() {
     return matchSearch && matchRole;
   });
 
+  const safeJson = async (res: Response) => {
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return {}; }
+  };
+
   const handleChangeRole = async (target: ProfileRow, newRole: UserRole) => {
     if (target.role === newRole) return;
     setSavingId(target.id);
@@ -92,8 +97,8 @@ export default function Pengguna() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: newRole }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Gagal mengubah peran");
+      const json = await safeJson(res);
+      if (!res.ok) throw new Error(json.error ?? `Server error ${res.status}`);
       toast({ title: "Peran diperbarui", description: `${target.full_name} sekarang ${roleStyles[newRole].label}` });
       setProfiles((prev) => prev.map((p) => (p.id === target.id ? { ...p, role: newRole } : p)));
     } catch (err: any) {
@@ -108,8 +113,8 @@ export default function Pengguna() {
     setDeleting(true);
     try {
       const res = await fetch(`/api/users/${deleteTarget.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Gagal menghapus pengguna");
+      const json = await safeJson(res);
+      if (!res.ok) throw new Error(json.error ?? `Server error ${res.status}`);
       toast({ title: "Pengguna dihapus", description: `${deleteTarget.full_name} sudah dihapus dari sistem.` });
       setProfiles((prev) => prev.filter((p) => p.id !== deleteTarget.id));
       setDeleteTarget(null);
